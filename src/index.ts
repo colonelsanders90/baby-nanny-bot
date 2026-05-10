@@ -1,5 +1,5 @@
 import { Bot, InlineKeyboard, InputFile } from 'grammy';
-import { generateTrendsImage, DayStats, generateFeedSleepChart, FeedSleepDay, generateMlSleepChart, MlSleepPoint } from './charts';
+import { generateTrendsImage, DayStats, generateFeedSleepChart, FeedSleepDay, generateMlSleepChart, MlSleepPoint, generateFeedTimingChart } from './charts';
 import cron from 'node-cron';
 import {
   initDb,
@@ -25,6 +25,7 @@ import {
   getEventSummaryByDay,
   getFeedTimestampsForPeriod,
   getFeedCorrelationData,
+  getFeedTimingsForPeriod,
   VALID_NAPPY_TYPES,
 } from './db';
 
@@ -266,6 +267,7 @@ function trendsKeyboard() {
     .text('📊 Activity Heatmap', 'trends:heatmap').row()
     .text('😴 Feed vs Sleep',    'trends:feedsleep').row()
     .text('🍼 ml vs Sleep',      'trends:mlsleep').row()
+    .text('⏰ Feed Timing',      'trends:timing').row()
     .text('⬅️ Back',             'cancel');
 }
 
@@ -605,6 +607,17 @@ bot.callbackQuery('trends:mlsleep', async (ctx) => {
     const primaryId = await resolvePrimaryChat(chatId);
     try { await ctx.editMessageText('What do you need?', { reply_markup: menuKeyboard() }); } catch {}
     await sendMlSleepChart(chatId, primaryId);
+  }
+});
+
+bot.callbackQuery('trends:timing', async (ctx) => {
+  if (!await guard(ctx)) return;
+  await ctx.answerCallbackQuery('Generating chart…');
+  const chatId = getChatId(ctx);
+  if (chatId) {
+    const primaryId = await resolvePrimaryChat(chatId);
+    try { await ctx.editMessageText('What do you need?', { reply_markup: menuKeyboard() }); } catch {}
+    await sendFeedTimingChart(chatId, primaryId);
   }
 });
 
@@ -1097,6 +1110,40 @@ async function sendMlSleepChart(chatId: number, primaryId: number) {
   }
 
   await bot.api.sendPhoto(chatId, new InputFile(imgBuf, 'ml-sleep.png'), {
+    caption,
+    reply_markup: menuKeyboard(),
+  });
+}
+
+// ============================================================
+// Feed timing dot-plot helper
+// ============================================================
+
+const TIMING_DAYS = 14;
+
+async function sendFeedTimingChart(chatId: number, primaryId: number) {
+  const babyName = await getCachedBabyName(primaryId) ?? 'Baby';
+  const toDate   = todayStr();
+  const fromDate = offsetDate(toDate, -(TIMING_DAYS - 1));
+
+  const rows = await getFeedTimingsForPeriod(primaryId, fromDate, toDate, TZ);
+
+  const data = new Map<string, number[]>();
+  for (const row of rows) {
+    const arr = data.get(row.day) ?? [];
+    arr.push(Number(row.time_of_day));
+    data.set(row.day, arr);
+  }
+
+  const imgBuf = await generateFeedTimingChart(data, babyName, fromDate, toDate);
+
+  const avgPerDay = (rows.length / TIMING_DAYS).toFixed(1);
+  const caption =
+    `⏰ ${babyName}'s feed timing — last ${TIMING_DAYS} days\n\n` +
+    `🍼 ${rows.length} feeds total · avg ${avgPerDay}/day\n` +
+    `Each row = one day · each dot = one feed`;
+
+  await bot.api.sendPhoto(chatId, new InputFile(imgBuf, 'feed-timing.png'), {
     caption,
     reply_markup: menuKeyboard(),
   });

@@ -547,3 +547,120 @@ export async function generateMlSleepChart(
 
   return canvas.toBuffer('image/png');
 }
+
+// ── Feed timing dot plot ───────────────────────────────────────────────────────
+
+const TM_ROWS    = 14;
+const TM_ROW_H   = 20;
+const TM_DOT_R   = 4;
+const TM_LLABEL  = 46;                              // left label width
+const TM_X0      = PAD + TM_LLABEL;                 // 66
+const TM_CHART_W = W - PAD - TM_LLABEL - PAD;       // 254
+const TM_CHART_H = TM_ROWS * TM_ROW_H;              // 280
+const TM_XAXIS_H = 22;
+const TM_H       = PAD + HEADER_H + TM_CHART_H + TM_XAXIS_H + PAD;  // 378
+
+const TM_DOT  = 'rgba(34, 197, 158, 0.75)';
+const TM_GRID = '#ede9e4';
+
+/**
+ * Returns a PNG Buffer: dot plot showing feed times across the last 14 days.
+ * Each row = one day (newest at top). Each dot = one feed at its local time.
+ */
+export async function generateFeedTimingChart(
+  data:         Map<string, number[]>,   // YYYY-MM-DD → [hours since midnight]
+  babyName:     string,
+  fromDateStr:  string,
+  todayDateStr: string,
+): Promise<Buffer> {
+  const canvas = createCanvas(W, TM_H);
+  const ctx    = canvas.getContext('2d') as any;
+
+  roundRect(ctx, 0, 0, W, TM_H, 10, BG);
+
+  ctx.fillStyle = TEXT_DK;
+  ctx.font      = 'bold 14px Roboto';
+  ctx.textAlign = 'left';
+  ctx.fillText(`${babyName}'s feed timing — last ${TM_ROWS} days`, PAD, PAD + 22);
+
+  // Build date list newest-first
+  const dates: string[] = [];
+  {
+    let d = new Date(todayDateStr + 'T12:00:00Z');
+    const start = new Date(fromDateStr + 'T12:00:00Z');
+    while (d >= start) {
+      dates.push(d.toISOString().slice(0, 10));
+      d = new Date(d.getTime() - 86_400_000);
+    }
+  }
+
+  const chartY0 = PAD + HEADER_H;
+  const toX = (h: number) => TM_X0 + (h / 24) * TM_CHART_W;
+
+  // Vertical time guides at 6h, 12h, 18h
+  for (const h of [6, 12, 18]) {
+    const gx = toX(h);
+    ctx.strokeStyle = h === 12 ? '#d8d4cf' : TM_GRID;
+    ctx.lineWidth   = 1;
+    ctx.setLineDash(h === 12 ? [] : [3, 3]);
+    ctx.beginPath();
+    ctx.moveTo(gx, chartY0);
+    ctx.lineTo(gx, chartY0 + TM_CHART_H);
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
+
+  // Rows
+  for (let i = 0; i < dates.length; i++) {
+    const day  = dates[i];
+    const rowY = chartY0 + i * TM_ROW_H;
+    const midY = rowY + TM_ROW_H / 2;
+
+    // Subtle alternating band
+    if (i % 2 === 0) {
+      ctx.fillStyle = '#fafaf8';
+      ctx.fillRect(TM_X0, rowY, TM_CHART_W, TM_ROW_H);
+    }
+
+    // Day label: "Mon 4" style
+    const dt  = new Date(day + 'T12:00:00Z');
+    const lbl = dt.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', timeZone: 'UTC' });
+    ctx.font      = '9px Roboto';
+    ctx.fillStyle = TEXT_LT;
+    ctx.textAlign = 'right';
+    ctx.fillText(lbl, TM_X0 - 5, midY + 4);
+
+    // Feed dots
+    for (const t of (data.get(day) ?? [])) {
+      ctx.beginPath();
+      ctx.arc(toX(t), midY, TM_DOT_R, 0, Math.PI * 2);
+      ctx.fillStyle = TM_DOT;
+      ctx.fill();
+    }
+  }
+
+  // Bottom axis line
+  ctx.strokeStyle = AXIS_LINE;
+  ctx.lineWidth   = 1;
+  ctx.beginPath();
+  ctx.moveTo(TM_X0, chartY0 + TM_CHART_H);
+  ctx.lineTo(TM_X0 + TM_CHART_W, chartY0 + TM_CHART_H);
+  ctx.stroke();
+
+  // X-axis time labels
+  const xlabels = [
+    { h: 0,  lbl: '12am', align: 'left'   },
+    { h: 6,  lbl: '6am',  align: 'center' },
+    { h: 12, lbl: '12pm', align: 'center' },
+    { h: 18, lbl: '6pm',  align: 'center' },
+    { h: 24, lbl: '12am', align: 'right'  },
+  ] as const;
+  ctx.font      = '9px Roboto';
+  ctx.fillStyle = TEXT_LT;
+  for (const { h, lbl, align } of xlabels) {
+    ctx.textAlign = align;
+    ctx.fillText(lbl, toX(h), chartY0 + TM_CHART_H + 15);
+  }
+
+  return canvas.toBuffer('image/png');
+}
