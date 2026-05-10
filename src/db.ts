@@ -271,6 +271,29 @@ export async function getFeedCorrelationData(
   return result.rows;
 }
 
+export async function getFeedTimingsForPeriod(
+  chatId: number,
+  fromDateStr: string,
+  toDateStr: string,
+  tz: string
+): Promise<Array<{ day: string; time_of_day: number }>> {
+  const result = await pool.query(
+    `SELECT
+       ((logged_at AT TIME ZONE $4)::date)::text AS day,
+       EXTRACT(HOUR   FROM logged_at AT TIME ZONE $4)
+         + EXTRACT(MINUTE FROM logged_at AT TIME ZONE $4) / 60.0
+         + EXTRACT(SECOND FROM logged_at AT TIME ZONE $4) / 3600.0 AS time_of_day
+     FROM events
+     WHERE chat_id = $1
+       AND type = 'feed'
+       AND (logged_at AT TIME ZONE $4)::date >= $2::date
+       AND (logged_at AT TIME ZONE $4)::date <= $3::date
+     ORDER BY day ASC, time_of_day ASC`,
+    [chatId, fromDateStr, toDateStr, tz]
+  );
+  return result.rows;
+}
+
 export async function getAllChats(): Promise<number[]> {
   const result = await pool.query('SELECT chat_id FROM chats');
   return result.rows.map((r) => Number(r.chat_id));
