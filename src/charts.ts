@@ -47,8 +47,10 @@ const H = PAD + HEADER_H + SECTION_H + SEC_GAP + SECTION_H + PAD;
 //      = 20 + 36 + 318 + 22 + 318 + 20 = 734
 
 // ── Colour palettes ───────────────────────────────────────────────────────────
-const CREAM = ['#edebe6', '#fdf4d3', '#f9e080', '#f0b830', '#c88a0a'];
-const BROWN = ['#edebe6', '#e8cfad', '#c49060', '#906038', '#5a3318'];
+// Feeds: GitHub-green style (empty → dark green)
+const FEED_PAL  = ['#ebedf0', '#9be9a8', '#40c463', '#30a14e', '#216e39'];
+// Nappies: amber (empty → dark amber)
+const NAPPY_PAL = ['#ebedf0', '#fde68a', '#fbbf24', '#d97706', '#92400e'];
 
 const BG      = '#ffffff';
 const TEXT_DK = '#24292e';
@@ -166,7 +168,7 @@ export async function generateTrendsImage(
     getValue: (s: DayStats) => number,
     maxVal:   number,
     palette:  string[],
-    maxLabel: string
+    unit:     string   // 'ml' for feeds, '' for counts
   ) {
     const gridY = sY + SEC_TITLE + WKLBL_H;
 
@@ -212,24 +214,21 @@ export async function generateTrendsImage(
       }
     }
 
-    // Colour legend
+    // Colour legend — swatches with scale values below each
     const legY = gridY + GRID_H + LEG_GAP;
 
-    ctx.font      = '9px Roboto';
-    ctx.fillStyle = TEXT_LT;
-    ctx.textAlign = 'right';
-    ctx.fillText('Less', x0 - 6, legY + CELL - 7);
-
     for (let i = 0; i < palette.length; i++) {
-      roundRect(ctx, x0 + i * (CELL + 3), legY, CELL, CELL, 3, palette[i]);
-    }
+      const sx = x0 + i * (CELL + 3);
+      roundRect(ctx, sx, legY, CELL, CELL, 3, palette[i]);
 
-    ctx.textAlign = 'left';
-    ctx.fillText(
-      `More  (max: ${maxLabel})`,
-      x0 + palette.length * (CELL + 3) + 6,
-      legY + CELL - 7
-    );
+      // Value label centred below swatch
+      const val = maxVal > 0 ? Math.round((i / (palette.length - 1)) * maxVal) : 0;
+      const lbl = i === 0 ? '0' : `${val}${unit}`;
+      ctx.font      = '8px Roboto';
+      ctx.fillStyle = TEXT_LT;
+      ctx.textAlign = 'center';
+      ctx.fillText(lbl, sx + CELL / 2, legY + CELL + 10);
+    }
   }
 
   const sec1Y = PAD + HEADER_H;
@@ -238,14 +237,12 @@ export async function generateTrendsImage(
   renderSection(
     sec1Y,
     'Feeds  (ml / day)',
-    v => v.feedMl, maxMl, CREAM,
-    maxMl > 0 ? `${maxMl} ml` : 'none yet'
+    v => v.feedMl, maxMl, FEED_PAL, 'ml'
   );
   renderSection(
     sec2Y,
     'Nappies  (changes / day)',
-    v => v.nappyCount, maxNappy, BROWN,
-    maxNappy > 0 ? String(maxNappy) : 'none yet'
+    v => v.nappyCount, maxNappy, NAPPY_PAL, ''
   );
 
   return canvas.toBuffer('image/png');
@@ -483,11 +480,16 @@ export async function generateMlSleepChart(
     ctx.fillText(`${h}h`, SC_X0 - 4, gy + 4);
   }
 
-  // X-axis ticks at each distinct ml value
-  const distinctMl = [...new Set(mlValues)].sort((a, b) => a - b);
+  // X-axis ticks at evenly-spaced round intervals (not every distinct value)
+  const dataRange    = maxMl - minMl;
+  const tickInterval = dataRange <= 30 ? 10 : dataRange <= 80 ? 20 : dataRange <= 150 ? 25 : 50;
+  const firstTick    = Math.ceil(minMl / tickInterval) * tickInterval;
+  const xTicks: number[] = [];
+  for (let t = firstTick; t <= maxMl; t += tickInterval) xTicks.push(t);
+
   ctx.strokeStyle = AXIS_LINE;
   ctx.lineWidth   = 1;
-  for (const ml of distinctMl) {
+  for (const ml of xTicks) {
     const cx = toCanvasX(ml);
     ctx.beginPath();
     ctx.moveTo(cx, chartBot);
