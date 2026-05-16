@@ -16,7 +16,6 @@ import {
   getNappiesForDay,
   getRecentEvents,
   deleteEvent,
-  getAllChats,
   resolvePrimaryChat,
   createLinkCode,
   linkChat,
@@ -239,6 +238,10 @@ function formatTimeInTz(date: Date): string {
   return date.toLocaleTimeString('en-GB', { timeZone: TZ, hour: '2-digit', minute: '2-digit', hour12: false });
 }
 
+function escapeMd(text: string): string {
+  return text.replace(/[_*`[\\]/g, '\\$&');
+}
+
 const NAPPY_EMOJI: Record<string, string> = {
   wet: '💧',
   dirty: '💩',
@@ -426,6 +429,10 @@ bot.command('join', async (ctx) => {
     await ctx.reply('Please provide a code: /join ABC123');
     return;
   }
+  if (code.length > 16) {
+    await ctx.reply('❌ Invalid code format.');
+    return;
+  }
   // 5 attempts per 10 minutes per chat
   if (!rateLimit(`join:${ctx.chat.id}`, 5, 10 * 60_000)) {
     await ctx.reply('⏱️ Too many join attempts. Please wait 10 minutes before trying again.');
@@ -464,6 +471,10 @@ bot.callbackQuery(/^feed_ml:(\d+)$/, async (ctx) => {
   if (!await guard(ctx)) return;
   const chatId = getChatId(ctx);
   const amountMl = parseInt(ctx.match[1], 10);
+  if (amountMl < 1 || amountMl > 600) {
+    await ctx.answerCallbackQuery({ text: 'Invalid amount (1–600 ml)', show_alert: true });
+    return;
+  }
   conv.set(chatId, { step: 'feed_time', amountMl });
   await ctx.answerCallbackQuery();
   await ctx.editMessageText(
@@ -501,15 +512,24 @@ bot.callbackQuery(/^time:(now|\d+)$/, async (ctx) => {
     return;
   }
   const val = ctx.match[1];
-  const loggedAt = val === 'now'
-    ? new Date()
-    : new Date(Date.now() - parseInt(val, 10) * 60_000);
+  let loggedAt: Date;
+  if (val === 'now') {
+    loggedAt = new Date();
+  } else {
+    const offsetMs = parseInt(val, 10) * 60_000;
+    if (offsetMs > MAX_BACKDATE_MS) {
+      await ctx.answerCallbackQuery({ text: 'Time too far in the past', show_alert: true });
+      return;
+    }
+    loggedAt = new Date(Date.now() - offsetMs);
+  }
   await finishLog(chatId, state, loggedAt, (text, extra) =>
     ctx.editMessageText(text, extra)
   );
 });
 
 bot.callbackQuery('cancel', async (ctx) => {
+  if (!await guard(ctx)) return;
   const chatId = getChatId(ctx);
   conv.delete(chatId);
   await ctx.answerCallbackQuery('Cancelled');
@@ -666,6 +686,7 @@ bot.callbackQuery(/^delconfirm:(\d+)$/, async (ctx) => {
 });
 
 bot.callbackQuery('delcancel', async (ctx) => {
+  if (!await guard(ctx)) return;
   await ctx.answerCallbackQuery('Cancelled');
   const chatId = getChatId(ctx);
   const primaryId = await resolvePrimaryChat(chatId);
@@ -717,7 +738,7 @@ bot.on('message:text', async (ctx) => {
     await setBabyName(primaryId, name);
     babyNameCache.set(primaryId, name);
     conv.delete(chatId);
-    await ctx.reply(`👶 ${name} Nanny Bot is ready! What do you need?`, {
+    await ctx.reply(`👶 ${escapeMd(name)} Nanny Bot is ready! What do you need?`, {
       reply_markup: menuKeyboard(),
     });
     return;
@@ -1156,17 +1177,17 @@ async function sendFeedTimingChart(chatId: number, primaryId: number) {
 cron.schedule('*/5 * * * *', async () => {
   let chats: number[];
   try {
-    chats = await getAllChats();
+    chats = await getAuthorizedChats();
   } catch (err) {
     console.error('Cron: failed to fetch chats:', err);
     return;
   }
 
-  for (const chatId of chats) {
+  await Promise.all(chats.map(async (chatId) => {
     try {
       const primaryId = await resolvePrimaryChat(chatId);
       const lastFeed  = await getLastFeed(primaryId);
-      if (!lastFeed) continue;
+      if (!lastFeed) return;
 
       const msSince      = Date.now() - new Date(lastFeed.logged_at).getTime();
       const twoHalfHours = 2.5 * 60 * 60 * 1000;
@@ -1191,7 +1212,7 @@ cron.schedule('*/5 * * * *', async () => {
       // doesn't abort notifications for everyone else.
       console.error(`Cron: error for chat ${chatId}:`, (err as Error).message);
     }
-  }
+  }));
 });
 
 // ============================================================
@@ -1199,6 +1220,17 @@ cron.schedule('*/5 * * * *', async () => {
 // ============================================================
 
 async function main() {
+  if (!process.env.DATABASE_URL) {
+    console.error('ERROR: DATABASE_URL is not set');
+    process.exit(1);
+  }
+  try {
+    new Date().toLocaleDateString('en-CA', { timeZone: TZ });
+  } catch {
+    console.error(`ERROR: Invalid TIMEZONE value: "${TZ}"`);
+    process.exit(1);
+  }
+
   await initDb();
   console.log('DB ready');
 

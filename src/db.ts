@@ -1,9 +1,19 @@
 import { Pool } from 'pg';
 import { randomBytes } from 'crypto';
 
+function sslConfig() {
+  const mode = process.env.DATABASE_SSL_MODE ?? 'verify';
+  if (mode === 'disable') return false;
+  if (mode === 'no-verify') return { rejectUnauthorized: false };
+  return true;
+}
+
 export const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: process.env.DATABASE_URL?.includes('railway') ? { rejectUnauthorized: false } : false,
+  max: 20,
+  idleTimeoutMillis: 30_000,
+  connectionTimeoutMillis: 5_000,
+  ssl: sslConfig(),
 });
 
 export async function initDb() {
@@ -32,6 +42,8 @@ export async function initDb() {
     );
     ALTER TABLE chats ADD COLUMN IF NOT EXISTS authorized BOOLEAN NOT NULL DEFAULT FALSE;
     ALTER TABLE chats ADD COLUMN IF NOT EXISTS baby_name VARCHAR(50);
+    CREATE INDEX IF NOT EXISTS idx_events_chat_logged ON events (chat_id, logged_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_chat_links_chat_id ON chat_links (chat_id);
   `);
 }
 
@@ -78,7 +90,7 @@ export async function createLinkCode(chatId: number): Promise<string> {
 // Returns the primary chat_id on success, null if code is invalid or self-link.
 export async function linkChat(chatId: number, code: string): Promise<number | null> {
   const result = await pool.query(
-    'SELECT primary_chat_id FROM link_codes WHERE code = $1',
+    `SELECT primary_chat_id FROM link_codes WHERE code = $1 AND created_at > NOW() - INTERVAL '24 hours'`,
     [code.toUpperCase()]
   );
   if (!result.rows[0]) return null;
