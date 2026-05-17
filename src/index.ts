@@ -1266,10 +1266,7 @@ async function main() {
     { command: 'help',    description: '❓ Show all commands' },
   ]).catch((e) => console.error('setMyCommands failed:', e));
 
-  bot.start({
-    drop_pending_updates: true,
-    allowed_updates: ['message', 'callback_query'],
-  });
+  bot.start({ drop_pending_updates: true });
   console.log('Nanny Bot running');
 }
 
