@@ -1250,7 +1250,8 @@ async function main() {
     console.log(`Restricted mode active — ${authorizedChats.size} authorised chat(s)`);
   }
 
-  await bot.api.setMyCommands([
+  // Fire-and-forget — no need to block startup on this
+  bot.api.setMyCommands([
     { command: 'fed',     description: '🍼 Log a feed' },
     { command: 'nappy',   description: '🚼 Log a nappy change' },
     { command: 'status',  description: '📊 Last feed & nappy' },
@@ -1263,10 +1264,12 @@ async function main() {
     { command: 'share',   description: '🔗 Generate a code to share with your partner' },
     { command: 'join',    description: "🔗 Join your partner's shared tracker" },
     { command: 'help',    description: '❓ Show all commands' },
-  ]);
-  console.log('Commands registered');
+  ]).catch((e) => console.error('setMyCommands failed:', e));
 
-  bot.start();
+  bot.start({
+    drop_pending_updates: true,
+    allowed_updates: ['message', 'callback_query'],
+  });
   console.log('Nanny Bot running');
 }
 
