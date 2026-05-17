@@ -6,7 +6,7 @@
   <meta name="description" content="Nanny Bot — Track every feed and nappy change right inside Telegram. Built for sleep-deprived parents who need one-tap logging at 3am.">
   <meta property="og:title" content="Nanny Bot · Baby tracking for tired parents">
   <meta property="og:description" content="Log feeds and nappy changes in two taps. Smart reminders. Partner sharing. Charts that actually tell you something.">
-  <meta property="og:image" content="screenshots/heatmap.png">
+  <meta property="og:image" content="screenshots/heatmap.jpg">
   <title>Nanny Bot · Baby tracking for tired parents</title>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -163,12 +163,15 @@
     /* ── Features ────────────────────────────── */
     .features { background: var(--light); }
     .features-grid {
-      display: grid; gap: 18px; margin-top: 52px;
-      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      display: grid; gap: 20px; margin-top: 52px;
+      grid-template-columns: repeat(2, 1fr);
     }
+    @media (max-width: 640px) { .features-grid { grid-template-columns: 1fr; } }
+
     .feature-card {
       background: white; border: 1px solid var(--border);
-      border-radius: var(--r-lg); padding: 28px 26px;
+      border-radius: var(--r-lg); padding: 32px 28px;
+      display: flex; gap: 20px; align-items: flex-start;
       transition: box-shadow 0.2s, transform 0.2s;
     }
     .feature-card:hover {
@@ -176,9 +179,9 @@
       transform: translateY(-3px);
     }
     .fi {
-      width: 48px; height: 48px; border-radius: 13px;
+      width: 56px; height: 56px; border-radius: 14px;
       display: flex; align-items: center; justify-content: center;
-      font-size: 22px; margin-bottom: 18px;
+      font-size: 26px; flex-shrink: 0;
     }
     .fi-blue   { background: #dbeafe; }
     .fi-orange { background: #ffedd5; }
@@ -186,8 +189,9 @@
     .fi-purple { background: #ede9fe; }
     .fi-green  { background: #dcfce7; }
     .fi-gray   { background: var(--light); }
-    .feature-card h3 { font-size: 16px; font-weight: 700; margin-bottom: 8px; }
-    .feature-card p  { font-size: 14px; color: var(--muted); line-height: 1.65; }
+    .feature-text { }
+    .feature-card h3 { font-size: 17px; font-weight: 700; margin-bottom: 8px; line-height: 1.3; }
+    .feature-card p  { font-size: 14px; color: var(--muted); line-height: 1.7; }
 
     /* ── Charts showcase ─────────────────────── */
     .charts-grid {
@@ -381,7 +385,7 @@
     <div class="hero-visual">
       <div class="hero-chat-bubble bot">
         <div class="bubble-label blue">Nanny Bot</div>
-        🍼 Time to feed Reuben! Last fed 120ml — 3h ago
+        🍼 Time to feed your baby! Last fed 120ml — 3h ago
         <div class="chat-time">03:14</div>
       </div>
       <div class="hero-chat-bubble user">
@@ -391,7 +395,7 @@
       </div>
       <div class="hero-chat-bubble bot">
         <div class="bubble-label blue">Nanny Bot</div>
-        ✅ 🍼 Reuben had 120ml
+        ✅ 🍼 120ml logged
         <div class="chat-time">03:15</div>
       </div>
     </div>
@@ -401,7 +405,7 @@
 <!-- ── Problem strip ───────────────────────────── -->
 <div class="problem">
   <div class="problem-inner">
-    <h2>It's 3am. The baby's crying.<br><span>When did he last feed?</span></h2>
+    <h2>It's 3am. The baby's crying.<br><span>When was the last feed?</span></h2>
     <p>
       You've both been up for hours. Your partner thinks it was an hour ago.
       You think it was two. You're too tired to scroll back through WhatsApp messages.
@@ -420,33 +424,45 @@
     <div class="features-grid">
       <div class="feature-card">
         <div class="fi fi-blue">🍼</div>
-        <h3>One-tap feed logging</h3>
-        <p>Pick the ml (90 / 100 / 110 / 120 or type any amount) and when it happened. Done in under 5 seconds, one hand on the baby the whole time.</p>
+        <div class="feature-text">
+          <h3>One-tap feed logging</h3>
+          <p>Pick the ml (90 / 100 / 110 / 120 or type any amount) and when it happened. Done in under 5 seconds — one hand on the baby the whole time.</p>
+        </div>
       </div>
       <div class="feature-card">
         <div class="fi fi-orange">⏰</div>
-        <h3>Smart reminders</h3>
-        <p>At 2h 30min you get a prep nudge. At 3 hours, a feed reminder — with the exact ml from the last feed. Never scramble to remember when you last fed.</p>
+        <div class="feature-text">
+          <h3>Automatic reminders</h3>
+          <p>A prep nudge at 2h 30min, then a feed reminder at 3h — with the exact ml from the last feed. Never wonder whether it's time again.</p>
+        </div>
       </div>
       <div class="feature-card">
         <div class="fi fi-teal">👫</div>
-        <h3>Partner sharing</h3>
-        <p>One <code>/share</code> code links both phones to the exact same data. Either parent can log, and both see the same history instantly. No more "I thought you did it."</p>
+        <div class="feature-text">
+          <h3>Shared with your partner</h3>
+          <p>One code links both phones to the same data. Either parent can log — the other sees it instantly. No more "I thought you did it."</p>
+        </div>
       </div>
       <div class="feature-card">
         <div class="fi fi-purple">💩</div>
-        <h3>Nappy tracking</h3>
-        <p>Wet, dirty, or both — with the same time picker. Track nappy frequency alongside feeds so your paediatrician always has the full picture.</p>
+        <div class="feature-text">
+          <h3>Nappy tracking</h3>
+          <p>Wet, dirty, or both — logged in the same two taps as a feed. Track nappy frequency alongside feeds so your paediatrician has the full picture.</p>
+        </div>
       </div>
       <div class="feature-card">
         <div class="fi fi-green">📅</div>
-        <h3>Daily snapshots</h3>
-        <p>See every feed and nappy change for any day, with totals and times, and swipe back through previous days with ◀ ▶ navigation.</p>
+        <div class="feature-text">
+          <h3>Daily history</h3>
+          <p>Every feed and nappy change for any day, with totals and timestamps. Navigate backwards day by day with ◀ ▶ buttons.</p>
+        </div>
       </div>
       <div class="feature-card">
         <div class="fi fi-gray">🗑️</div>
-        <h3>Easy corrections</h3>
-        <p>Logged the wrong amount? Tap Delete, pick the entry, confirm. No data is permanent until you're happy with it — tired fingers make mistakes.</p>
+        <div class="feature-text">
+          <h3>Fix mistakes easily</h3>
+          <p>Tap Delete, pick the entry, confirm. Tired fingers make mistakes — nothing is permanent until you're satisfied.</p>
+        </div>
       </div>
     </div>
   </div>
@@ -463,7 +479,7 @@
 
       <div class="chart-card">
         <div class="chart-img-wrap">
-          <img src="screenshots/heatmap.png" alt="8-week activity heatmap showing feed ml per day in green and nappy changes in amber">
+          <img src="screenshots/heatmap.jpg" alt="8-week activity heatmap showing feed ml per day in green and nappy changes in amber">
         </div>
         <div class="chart-body">
           <span class="chart-tag tag-blue">8 weeks · Heatmap</span>
@@ -474,7 +490,7 @@
 
       <div class="chart-card">
         <div class="chart-img-wrap">
-          <img src="screenshots/feed-sleep.png" alt="Bar chart showing feeds per day and average sleep between feeds over 14 days">
+          <img src="screenshots/feed-sleep.jpg" alt="Bar chart showing feeds per day and average sleep between feeds over 14 days">
         </div>
         <div class="chart-body">
           <span class="chart-tag tag-orange">14 days · Feed &amp; Sleep</span>
@@ -485,7 +501,7 @@
 
       <div class="chart-card">
         <div class="chart-img-wrap">
-          <img src="screenshots/timing.png" alt="Dot plot showing feed times across 14 days, each row is a day, each dot is a feed">
+          <img src="screenshots/timing.jpg" alt="Dot plot showing feed times across 14 days, each row is a day, each dot is a feed">
         </div>
         <div class="chart-body">
           <span class="chart-tag tag-teal">14 days · Feed Timing</span>
@@ -496,12 +512,12 @@
 
       <div class="chart-card">
         <div class="chart-img-wrap">
-          <img src="screenshots/ml-sleep.png" alt="Scatter chart showing milk volume vs sleep duration with a trend line">
+          <img src="screenshots/ml-sleep.jpg" alt="Scatter chart showing milk volume vs sleep duration with a trend line">
         </div>
         <div class="chart-body">
           <span class="chart-tag tag-purple">60 days · ml vs Sleep</span>
           <h3>Does a bigger feed buy more sleep?</h3>
-          <p>Scatter plot of every feed vs the sleep that followed, with a trend line. It's the question every parent asks at 2am — now you have actual data. Spoiler: the relationship is more complicated than you think.</p>
+          <p>Scatter plot of every feed vs the sleep that followed, with a trend line. It's the question every parent asks at 2am — now you have actual data to answer it.</p>
         </div>
       </div>
 
