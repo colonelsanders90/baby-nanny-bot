@@ -1,0 +1,633 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Nanny Bot — Track every feed and nappy change right inside Telegram. Built for sleep-deprived parents who need one-tap logging at 3am.">
+  <meta property="og:title" content="Nanny Bot · Baby tracking for tired parents">
+  <meta property="og:description" content="Log feeds and nappy changes in two taps. Smart reminders. Partner sharing. Charts that actually tell you something.">
+  <meta property="og:image" content="screenshots/heatmap.png">
+  <title>Nanny Bot · Baby tracking for tired parents</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --blue:       #3b82f6;
+      --blue-light: #eff6ff;
+      --blue-dark:  #1d4ed8;
+      --orange:     #f97316;
+      --teal:       #14b8a6;
+      --purple:     #8b5cf6;
+      --green:      #22c55e;
+      --dark:       #1e293b;
+      --muted:      #64748b;
+      --light:      #f8fafc;
+      --border:     #e2e8f0;
+      --r:          12px;
+      --r-lg:       20px;
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      color: var(--dark);
+      background: #fff;
+      line-height: 1.6;
+    }
+
+    /* ── Nav ─────────────────────────────────── */
+    nav {
+      position: sticky; top: 0; z-index: 100;
+      background: rgba(255,255,255,0.95);
+      backdrop-filter: blur(10px);
+      border-bottom: 1px solid var(--border);
+    }
+    .nav-inner {
+      max-width: 1100px; margin: 0 auto; padding: 0 24px;
+      display: flex; align-items: center; justify-content: space-between;
+      height: 64px;
+    }
+    .nav-brand {
+      display: flex; align-items: center; gap: 10px;
+      font-weight: 800; font-size: 17px; color: var(--dark);
+      text-decoration: none;
+    }
+    .nav-brand img {
+      width: 34px; height: 34px; border-radius: 9px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.12);
+    }
+    .nav-links { display: flex; align-items: center; gap: 8px; }
+
+    /* ── Buttons ─────────────────────────────── */
+    .btn {
+      display: inline-flex; align-items: center; gap: 7px;
+      padding: 10px 18px; border-radius: 9px;
+      font-weight: 600; font-size: 14px; text-decoration: none;
+      border: none; cursor: pointer; transition: all 0.18s;
+      white-space: nowrap;
+    }
+    .btn-primary { background: var(--blue); color: #fff; }
+    .btn-primary:hover { background: var(--blue-dark); transform: translateY(-1px); box-shadow: 0 4px 16px rgba(59,130,246,0.35); }
+    .btn-ghost { background: transparent; color: var(--muted); }
+    .btn-ghost:hover { color: var(--dark); background: var(--light); }
+    .btn-white { background: #fff; color: var(--blue-dark); }
+    .btn-white:hover { background: #f0f7ff; transform: translateY(-1px); }
+    .btn-lg { padding: 15px 30px; font-size: 16px; border-radius: 11px; }
+
+    /* ── Hero ────────────────────────────────── */
+    .hero {
+      background: linear-gradient(150deg, #f0f7ff 0%, #fff 55%, #fff7ed 100%);
+      padding: 96px 24px 80px;
+      text-align: center;
+    }
+    .hero-badge {
+      display: inline-flex; align-items: center; gap: 6px;
+      background: var(--blue-light); color: var(--blue);
+      padding: 5px 14px; border-radius: 100px;
+      font-size: 12px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase;
+      margin-bottom: 28px;
+    }
+    .hero h1 {
+      font-size: clamp(38px, 8vw, 68px);
+      font-weight: 900; line-height: 1.07; letter-spacing: -0.03em;
+      color: var(--dark); margin-bottom: 22px;
+    }
+    .hero h1 em { font-style: normal; color: var(--blue); }
+    .hero-sub {
+      font-size: clamp(16px, 2.5vw, 20px); color: var(--muted);
+      max-width: 540px; margin: 0 auto 40px; line-height: 1.75;
+    }
+    .hero-cta { display: flex; align-items: center; justify-content: center; gap: 12px; flex-wrap: wrap; }
+    .hero-note { margin-top: 18px; font-size: 13px; color: var(--muted); }
+    .hero-note a { color: inherit; text-decoration: underline; }
+
+    .hero-visual {
+      margin-top: 64px;
+      display: flex; justify-content: center; gap: 16px; flex-wrap: wrap;
+      align-items: flex-end;
+    }
+    .hero-chat-bubble {
+      background: white; border: 1px solid var(--border);
+      border-radius: 16px; padding: 16px 20px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.07);
+      text-align: left; max-width: 220px;
+      font-size: 14px; line-height: 1.5;
+    }
+    .hero-chat-bubble.bot {
+      border-radius: 4px 16px 16px 16px;
+      background: #f0f7ff;
+    }
+    .hero-chat-bubble.user {
+      border-radius: 16px 4px 16px 16px;
+      background: white;
+    }
+    .bubble-label {
+      font-size: 11px; font-weight: 700; letter-spacing: 0.04em;
+      color: var(--muted); text-transform: uppercase; margin-bottom: 6px;
+    }
+    .bubble-label.blue { color: var(--blue); }
+    .chat-time { font-size: 11px; color: var(--muted); margin-top: 6px; text-align: right; }
+
+    /* ── Section layout ──────────────────────── */
+    section { padding: 80px 24px; }
+    .container { max-width: 1100px; margin: 0 auto; }
+    .section-label {
+      font-size: 12px; font-weight: 700; letter-spacing: 0.09em;
+      text-transform: uppercase; color: var(--blue); margin-bottom: 12px;
+    }
+    .section-title {
+      font-size: clamp(28px, 5vw, 44px);
+      font-weight: 800; line-height: 1.12; letter-spacing: -0.02em;
+      color: var(--dark); margin-bottom: 16px;
+    }
+    .section-sub {
+      font-size: 17px; color: var(--muted); max-width: 560px; line-height: 1.75;
+    }
+
+    /* ── Problem strip ───────────────────────── */
+    .problem {
+      background: var(--dark); color: white;
+      padding: 64px 24px; text-align: center;
+    }
+    .problem-inner { max-width: 760px; margin: 0 auto; }
+    .problem h2 {
+      font-size: clamp(22px, 4vw, 34px);
+      font-weight: 800; line-height: 1.25; margin-bottom: 20px;
+    }
+    .problem h2 span { color: #60a5fa; }
+    .problem p {
+      font-size: 17px; color: rgba(255,255,255,0.68); line-height: 1.85;
+    }
+
+    /* ── Features ────────────────────────────── */
+    .features { background: var(--light); }
+    .features-grid {
+      display: grid; gap: 18px; margin-top: 52px;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    }
+    .feature-card {
+      background: white; border: 1px solid var(--border);
+      border-radius: var(--r-lg); padding: 28px 26px;
+      transition: box-shadow 0.2s, transform 0.2s;
+    }
+    .feature-card:hover {
+      box-shadow: 0 10px 36px rgba(0,0,0,0.09);
+      transform: translateY(-3px);
+    }
+    .fi {
+      width: 48px; height: 48px; border-radius: 13px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 22px; margin-bottom: 18px;
+    }
+    .fi-blue   { background: #dbeafe; }
+    .fi-orange { background: #ffedd5; }
+    .fi-teal   { background: #ccfbf1; }
+    .fi-purple { background: #ede9fe; }
+    .fi-green  { background: #dcfce7; }
+    .fi-gray   { background: var(--light); }
+    .feature-card h3 { font-size: 16px; font-weight: 700; margin-bottom: 8px; }
+    .feature-card p  { font-size: 14px; color: var(--muted); line-height: 1.65; }
+
+    /* ── Charts showcase ─────────────────────── */
+    .charts-grid {
+      display: grid; gap: 28px; margin-top: 56px;
+      grid-template-columns: repeat(2, 1fr);
+    }
+    @media (max-width: 680px) { .charts-grid { grid-template-columns: 1fr; } }
+
+    .chart-card {
+      border: 1px solid var(--border); border-radius: var(--r-lg);
+      overflow: hidden; background: white;
+      box-shadow: 0 4px 24px rgba(0,0,0,0.06);
+      transition: box-shadow 0.2s, transform 0.2s;
+    }
+    .chart-card:hover {
+      box-shadow: 0 12px 40px rgba(0,0,0,0.11);
+      transform: translateY(-3px);
+    }
+    .chart-img-wrap {
+      background: #f9fafb;
+      display: flex; align-items: center; justify-content: center;
+      padding: 16px;
+      border-bottom: 1px solid var(--border);
+    }
+    .chart-img-wrap img {
+      width: 100%; max-width: 320px; height: auto;
+      display: block; border-radius: 8px;
+    }
+    .chart-body { padding: 20px 22px 24px; }
+    .chart-tag {
+      display: inline-block; font-size: 11px; font-weight: 700;
+      letter-spacing: 0.06em; text-transform: uppercase;
+      padding: 3px 10px; border-radius: 100px; margin-bottom: 10px;
+    }
+    .tag-blue   { background: #dbeafe; color: #1d4ed8; }
+    .tag-orange { background: #ffedd5; color: #c2410c; }
+    .tag-teal   { background: #ccfbf1; color: #0f766e; }
+    .tag-purple { background: #ede9fe; color: #6d28d9; }
+    .chart-body h3 { font-size: 16px; font-weight: 700; margin-bottom: 6px; }
+    .chart-body p  { font-size: 14px; color: var(--muted); line-height: 1.65; }
+
+    /* ── How it works ────────────────────────── */
+    .how { background: var(--light); }
+    .steps-grid {
+      display: grid; gap: 32px; margin-top: 56px;
+      grid-template-columns: repeat(3, 1fr);
+      position: relative;
+    }
+    @media (max-width: 640px) { .steps-grid { grid-template-columns: 1fr; } }
+    .step { text-align: center; }
+    .step-num {
+      width: 54px; height: 54px; border-radius: 50%;
+      background: var(--blue); color: white;
+      font-size: 20px; font-weight: 800;
+      display: flex; align-items: center; justify-content: center;
+      margin: 0 auto 20px;
+      box-shadow: 0 4px 16px rgba(59,130,246,0.35);
+    }
+    .step-icon { font-size: 28px; margin-bottom: 12px; }
+    .step h3 { font-size: 17px; font-weight: 700; margin-bottom: 10px; }
+    .step p   { font-size: 14px; color: var(--muted); line-height: 1.7; }
+    .step-connector {
+      display: none;
+    }
+    @media (min-width: 641px) {
+      .steps-grid::before,
+      .steps-grid::after {
+        content: '';
+        position: absolute; top: 27px;
+        height: 2px; background: var(--border);
+        width: calc(33.33% - 54px);
+      }
+      .steps-grid::before { left: calc(16.67% + 27px); }
+      .steps-grid::after  { right: calc(16.67% + 27px); }
+    }
+
+    /* ── Command ref ─────────────────────────── */
+    .commands { }
+    .cmd-grid {
+      display: grid; gap: 10px; margin-top: 48px;
+      grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    }
+    .cmd-row {
+      display: flex; align-items: center; gap: 14px;
+      background: var(--light); border: 1px solid var(--border);
+      border-radius: var(--r); padding: 14px 18px;
+    }
+    .cmd-name {
+      font-family: ui-monospace, SFMono-Regular, monospace;
+      font-size: 13px; font-weight: 600; color: var(--blue);
+      white-space: nowrap; min-width: 100px;
+    }
+    .cmd-desc { font-size: 13px; color: var(--muted); }
+
+    /* ── FAQ ─────────────────────────────────── */
+    .faq-list { margin-top: 48px; max-width: 740px; }
+    details {
+      border: 1px solid var(--border); border-radius: var(--r);
+      margin-bottom: 10px; overflow: hidden; background: white;
+    }
+    details[open] { box-shadow: 0 4px 20px rgba(0,0,0,0.07); }
+    summary {
+      padding: 18px 22px; font-weight: 600; font-size: 15px;
+      cursor: pointer; list-style: none;
+      display: flex; justify-content: space-between; align-items: center;
+      user-select: none;
+    }
+    summary::-webkit-details-marker { display: none; }
+    summary::after { content: '+'; font-size: 22px; color: var(--muted); transition: transform 0.2s; }
+    details[open] summary::after { transform: rotate(45deg); }
+    details .faq-ans { padding: 0 22px 20px; font-size: 14px; color: var(--muted); line-height: 1.8; }
+    details .faq-ans code {
+      background: var(--light); padding: 1px 6px;
+      border-radius: 4px; font-size: 13px;
+    }
+
+    /* ── CTA Banner ──────────────────────────── */
+    .cta-banner {
+      background: linear-gradient(135deg, #1e3a8a 0%, #2563eb 50%, #3b82f6 100%);
+      color: white; text-align: center; padding: 88px 24px;
+    }
+    .cta-banner h2 {
+      font-size: clamp(28px, 5vw, 44px);
+      font-weight: 800; margin-bottom: 16px; letter-spacing: -0.02em;
+    }
+    .cta-banner p {
+      font-size: 18px; opacity: 0.8;
+      max-width: 480px; margin: 0 auto 40px; line-height: 1.7;
+    }
+    .cta-inner-note { margin-top: 20px; font-size: 13px; opacity: 0.6; }
+
+    /* ── Footer ──────────────────────────────── */
+    footer {
+      background: var(--dark);
+      color: rgba(255,255,255,0.45);
+      padding: 40px 24px;
+      text-align: center;
+      font-size: 13px;
+    }
+    footer a { color: rgba(255,255,255,0.65); text-decoration: none; }
+    footer a:hover { color: white; }
+    .footer-links { display: flex; justify-content: center; gap: 24px; margin-bottom: 16px; }
+
+    /* ── Utilities ───────────────────────────── */
+    @media (max-width: 480px) {
+      section { padding: 56px 20px; }
+      .hero { padding: 72px 20px 56px; }
+      .nav-inner { padding: 0 16px; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ── Navigation ─────────────────────────────── -->
+<nav>
+  <div class="nav-inner">
+    <a href="#" class="nav-brand">
+      <img src="../logo.png" alt="Nanny Bot logo">
+      Nanny Bot
+    </a>
+    <div class="nav-links">
+      <a href="#features" class="btn btn-ghost">Features</a>
+      <a href="#charts" class="btn btn-ghost" style="display:none" id="nav-charts">Charts</a>
+      <a href="https://t.me/YourBotUsername" class="btn btn-primary" target="_blank" rel="noopener">
+        <svg class="tg" viewBox="0 0 24 24" fill="currentColor" width="15" height="15"><path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z"/></svg>
+        Open in Telegram
+      </a>
+    </div>
+  </div>
+</nav>
+
+<!-- ── Hero ───────────────────────────────────── -->
+<div class="hero">
+  <div class="container">
+    <div class="hero-badge">🍼 Free Telegram Bot</div>
+    <h1>Track every feed.<br>Every nappy.<br><em>In two taps.</em></h1>
+    <p class="hero-sub">
+      A Telegram bot designed for sleep-deprived parents. Log at 3am with one hand,
+      get reminders before you forget, and understand your baby's patterns — all without leaving Telegram.
+    </p>
+    <div class="hero-cta">
+      <a href="https://t.me/YourBotUsername" class="btn btn-primary btn-lg" target="_blank" rel="noopener">
+        <svg viewBox="0 0 24 24" fill="currentColor" width="18" height="18"><path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z"/></svg>
+        Start for free
+      </a>
+      <a href="#charts" class="btn btn-ghost btn-lg">See the charts ↓</a>
+    </div>
+    <p class="hero-note">No app download · Works on any phone · <a href="https://github.com/colonelsanders90/baby-nanny-bot" target="_blank" rel="noopener">Open source</a></p>
+
+    <!-- Mini chat mockup -->
+    <div class="hero-visual">
+      <div class="hero-chat-bubble bot">
+        <div class="bubble-label blue">Nanny Bot</div>
+        🍼 Time to feed Reuben! Last fed 120ml — 3h ago
+        <div class="chat-time">03:14</div>
+      </div>
+      <div class="hero-chat-bubble user">
+        <div class="bubble-label">You</div>
+        <em>taps "Fed now" → 120ml → Just now</em>
+        <div class="chat-time">03:15 ✓✓</div>
+      </div>
+      <div class="hero-chat-bubble bot">
+        <div class="bubble-label blue">Nanny Bot</div>
+        ✅ 🍼 Reuben had 120ml
+        <div class="chat-time">03:15</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── Problem strip ───────────────────────────── -->
+<div class="problem">
+  <div class="problem-inner">
+    <h2>It's 3am. The baby's crying.<br><span>When did he last feed?</span></h2>
+    <p>
+      You've both been up for hours. Your partner thinks it was an hour ago.
+      You think it was two. You're too tired to scroll back through WhatsApp messages.
+      Nanny Bot gives you one place, one tap, and a feed history that's always right — shared between both parents in real time.
+    </p>
+  </div>
+</div>
+
+<!-- ── Features ────────────────────────────────── -->
+<section class="features" id="features">
+  <div class="container">
+    <div class="section-label">Everything you need</div>
+    <h2 class="section-title">Built for the newborn weeks</h2>
+    <p class="section-sub">Every feature exists because a tired parent needed it at an inconvenient hour.</p>
+
+    <div class="features-grid">
+      <div class="feature-card">
+        <div class="fi fi-blue">🍼</div>
+        <h3>One-tap feed logging</h3>
+        <p>Pick the ml (90 / 100 / 110 / 120 or type any amount) and when it happened. Done in under 5 seconds, one hand on the baby the whole time.</p>
+      </div>
+      <div class="feature-card">
+        <div class="fi fi-orange">⏰</div>
+        <h3>Smart reminders</h3>
+        <p>At 2h 30min you get a prep nudge. At 3 hours, a feed reminder — with the exact ml from the last feed. Never scramble to remember when you last fed.</p>
+      </div>
+      <div class="feature-card">
+        <div class="fi fi-teal">👫</div>
+        <h3>Partner sharing</h3>
+        <p>One <code>/share</code> code links both phones to the exact same data. Either parent can log, and both see the same history instantly. No more "I thought you did it."</p>
+      </div>
+      <div class="feature-card">
+        <div class="fi fi-purple">💩</div>
+        <h3>Nappy tracking</h3>
+        <p>Wet, dirty, or both — with the same time picker. Track nappy frequency alongside feeds so your paediatrician always has the full picture.</p>
+      </div>
+      <div class="feature-card">
+        <div class="fi fi-green">📅</div>
+        <h3>Daily snapshots</h3>
+        <p>See every feed and nappy change for any day, with totals and times, and swipe back through previous days with ◀ ▶ navigation.</p>
+      </div>
+      <div class="feature-card">
+        <div class="fi fi-gray">🗑️</div>
+        <h3>Easy corrections</h3>
+        <p>Logged the wrong amount? Tap Delete, pick the entry, confirm. No data is permanent until you're happy with it — tired fingers make mistakes.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── Charts showcase ──────────────────────────── -->
+<section id="charts">
+  <div class="container">
+    <div class="section-label">Trend insights</div>
+    <h2 class="section-title">Charts that actually tell you something</h2>
+    <p class="section-sub">Generated inside Telegram — no app switching. Tap a trend, get a chart in seconds.</p>
+
+    <div class="charts-grid">
+
+      <div class="chart-card">
+        <div class="chart-img-wrap">
+          <img src="screenshots/heatmap.png" alt="8-week activity heatmap showing feed ml per day in green and nappy changes in amber">
+        </div>
+        <div class="chart-body">
+          <span class="chart-tag tag-blue">8 weeks · Heatmap</span>
+          <h3>The full picture at a glance</h3>
+          <p>GitHub-style activity grid showing daily feed volume (ml) and nappy frequency over 8 weeks. Spot the days your routine changed, and track recovery after illness or a growth spurt.</p>
+        </div>
+      </div>
+
+      <div class="chart-card">
+        <div class="chart-img-wrap">
+          <img src="screenshots/feed-sleep.png" alt="Bar chart showing feeds per day and average sleep between feeds over 14 days">
+        </div>
+        <div class="chart-body">
+          <span class="chart-tag tag-orange">14 days · Feed &amp; Sleep</span>
+          <h3>Do more feeds mean longer sleep?</h3>
+          <p>Two-panel bar chart tracking feeds per day alongside average sleep gap between feeds. See whether bigger feeding days genuinely lead to better rest — or if it's just luck.</p>
+        </div>
+      </div>
+
+      <div class="chart-card">
+        <div class="chart-img-wrap">
+          <img src="screenshots/timing.png" alt="Dot plot showing feed times across 14 days, each row is a day, each dot is a feed">
+        </div>
+        <div class="chart-body">
+          <span class="chart-tag tag-teal">14 days · Feed Timing</span>
+          <h3>Is a routine emerging?</h3>
+          <p>Each row is a day, each dot is a feed plotted at its time of day. When the dots start lining up vertically — that's your baby's schedule forming. One of the most satisfying charts you'll ever see.</p>
+        </div>
+      </div>
+
+      <div class="chart-card">
+        <div class="chart-img-wrap">
+          <img src="screenshots/ml-sleep.png" alt="Scatter chart showing milk volume vs sleep duration with a trend line">
+        </div>
+        <div class="chart-body">
+          <span class="chart-tag tag-purple">60 days · ml vs Sleep</span>
+          <h3>Does a bigger feed buy more sleep?</h3>
+          <p>Scatter plot of every feed vs the sleep that followed, with a trend line. It's the question every parent asks at 2am — now you have actual data. Spoiler: the relationship is more complicated than you think.</p>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- ── How it works ─────────────────────────────── -->
+<section class="how">
+  <div class="container">
+    <div class="section-label">Getting started</div>
+    <h2 class="section-title">Up and running in 30 seconds</h2>
+    <p class="section-sub">No accounts, no passwords, no app download. Just Telegram — which you're already using.</p>
+
+    <div class="steps-grid">
+      <div class="step">
+        <div class="step-num">1</div>
+        <div class="step-icon">💬</div>
+        <h3>Open the bot</h3>
+        <p>Search for Nanny Bot on Telegram or tap the link below. Hit /start and enter your baby's name. That's it — you're registered.</p>
+      </div>
+      <div class="step">
+        <div class="step-num">2</div>
+        <div class="step-icon">🍼</div>
+        <h3>Log your first feed</h3>
+        <p>Tap "Fed now", pick the ml, confirm the time. Your partner gets the same view the moment you log it — no sync required.</p>
+      </div>
+      <div class="step">
+        <div class="step-num">3</div>
+        <div class="step-icon">📈</div>
+        <h3>Watch the patterns</h3>
+        <p>After a few days, open Trends. The charts tell you whether a routine is forming, which volumes lead to longer sleep, and how each week compares.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── Command reference ────────────────────────── -->
+<section class="commands">
+  <div class="container">
+    <div class="section-label">All commands</div>
+    <h2 class="section-title">Everything, right from the keyboard</h2>
+    <p class="section-sub">Every feature is one command away. Or use the quick-action buttons so you never have to remember them.</p>
+
+    <div class="cmd-grid">
+      <div class="cmd-row"><span class="cmd-name">/fed</span><span class="cmd-desc">Log a feed — pick ml and time</span></div>
+      <div class="cmd-row"><span class="cmd-name">/nappy</span><span class="cmd-desc">Log a nappy change — wet, dirty, or both</span></div>
+      <div class="cmd-row"><span class="cmd-name">/status</span><span class="cmd-desc">Last feed, time since, and next feed countdown</span></div>
+      <div class="cmd-row"><span class="cmd-name">/last5</span><span class="cmd-desc">Last 5 feeds and nappy changes</span></div>
+      <div class="cmd-row"><span class="cmd-name">/daily</span><span class="cmd-desc">Full day snapshot with ◀ ▶ navigation</span></div>
+      <div class="cmd-row"><span class="cmd-name">/trends</span><span class="cmd-desc">Activity heatmap and trend charts</span></div>
+      <div class="cmd-row"><span class="cmd-name">/delete</span><span class="cmd-desc">Remove a recent entry</span></div>
+      <div class="cmd-row"><span class="cmd-name">/share</span><span class="cmd-desc">Generate a code to link your partner's phone</span></div>
+      <div class="cmd-row"><span class="cmd-name">/join &lt;code&gt;</span><span class="cmd-desc">Join your partner's shared tracker</span></div>
+      <div class="cmd-row"><span class="cmd-name">/menu</span><span class="cmd-desc">Show the quick-action button keyboard</span></div>
+    </div>
+  </div>
+</section>
+
+<!-- ── FAQ ─────────────────────────────────────── -->
+<section style="background: var(--light);">
+  <div class="container">
+    <div class="section-label">Common questions</div>
+    <h2 class="section-title">FAQ</h2>
+
+    <div class="faq-list">
+      <details>
+        <summary>Do I need to download an app?</summary>
+        <div class="faq-ans">No. Nanny Bot runs entirely inside Telegram, which you almost certainly already have. There is nothing to install beyond what you've already got.</div>
+      </details>
+      <details>
+        <summary>Is my data private?</summary>
+        <div class="faq-ans">Yes. The bot only responds to chat IDs you explicitly authorise. Your feeds and nappy data are stored in a private database and never shared with any third party. The source code is open on GitHub so you can verify this yourself — or self-host on your own infrastructure.</div>
+      </details>
+      <details>
+        <summary>How do I share tracking with my partner?</summary>
+        <div class="faq-ans">Send <code>/share</code> in your chat — the bot replies with a one-time link code. Your partner sends <code>/join &lt;code&gt;</code> in their own chat with the bot. From that point on, every log either of you makes is shared and visible to both of you instantly.</div>
+      </details>
+      <details>
+        <summary>Is it designed for bottle-fed babies?</summary>
+        <div class="faq-ans">Yes — feed tracking is built around ml volumes. It works best for bottle feeding (formula or expressed breast milk) where you know the amount. If you're breastfeeding, you can still use nappy tracking and the timing charts; the ml features just won't be relevant.</div>
+      </details>
+      <details>
+        <summary>What if I logged the wrong amount or time?</summary>
+        <div class="faq-ans">Tap /delete (or the 🗑️ Delete button from the menu), choose the entry from the list, and confirm. The entry is removed. Then log the correct one. Times up to 12 hours in the past can be set when logging, so you can backdate if you forgot to log at the time.</div>
+      </details>
+      <details>
+        <summary>Can I run this myself?</summary>
+        <div class="faq-ans">Absolutely — it's open source under MIT. You'll need a Telegram bot token from @BotFather, a PostgreSQL database, and a server (Railway is the easiest option). Full setup instructions are in the <a href="https://github.com/colonelsanders90/baby-nanny-bot" target="_blank" rel="noopener">GitHub repo</a>.</div>
+      </details>
+    </div>
+  </div>
+</section>
+
+<!-- ── CTA Banner ───────────────────────────────── -->
+<div class="cta-banner">
+  <div class="container">
+    <h2>Start tracking today —<br>before the next feed.</h2>
+    <p>It takes 30 seconds to set up and you'll wonder how you managed without it by morning.</p>
+    <a href="https://t.me/YourBotUsername" class="btn btn-white btn-lg" target="_blank" rel="noopener">
+      <svg viewBox="0 0 24 24" fill="currentColor" width="18" height="18"><path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z"/></svg>
+      Open Nanny Bot on Telegram
+    </a>
+    <p class="cta-inner-note">Free · Open source · No account needed</p>
+  </div>
+</div>
+
+<!-- ── Footer ──────────────────────────────────── -->
+<footer>
+  <div class="footer-links">
+    <a href="https://github.com/colonelsanders90/baby-nanny-bot" target="_blank" rel="noopener">GitHub</a>
+    <a href="https://t.me/YourBotUsername" target="_blank" rel="noopener">Telegram Bot</a>
+    <a href="https://github.com/colonelsanders90/baby-nanny-bot/blob/main/README.md" target="_blank" rel="noopener">Docs</a>
+  </div>
+  Built with love (and very little sleep) · MIT License
+</footer>
+
+<script>
+  // Show the Charts nav link once the section is in view
+  const chartsSection = document.getElementById('charts');
+  const navCharts = document.getElementById('nav-charts');
+  const observer = new IntersectionObserver(([e]) => {
+    if (e.isIntersecting) { navCharts.style.display = 'flex'; observer.disconnect(); }
+  });
+  observer.observe(chartsSection);
+</script>
+
+</body>
+</html>
