@@ -2,7 +2,7 @@ import { Pool } from 'pg';
 import { randomBytes } from 'crypto';
 
 function sslConfig() {
-  const mode = process.env.DATABASE_SSL_MODE ?? 'verify';
+  const mode = process.env.DATABASE_SSL_MODE ?? 'no-verify';
   if (mode === 'disable') return false;
   if (mode === 'no-verify') return { rejectUnauthorized: false };
   return true;
