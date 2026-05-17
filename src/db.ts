@@ -10,8 +10,9 @@ function sslConfig() {
 
 export const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  max: 20,
-  idleTimeoutMillis: 30_000,
+  min: 2,
+  max: 10,
+  idleTimeoutMillis: 60_000,
   connectionTimeoutMillis: 5_000,
   ssl: sslConfig(),
 });
