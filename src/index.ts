@@ -6,6 +6,7 @@ import {
   registerChat,
   authorizeChat,
   getAuthorizedChats,
+  getChatsNeedingReminder,
   logFeed,
   logNappy,
   getLastFeed,
@@ -19,6 +20,7 @@ import {
   resolvePrimaryChat,
   createLinkCode,
   linkChat,
+  deleteExpiredLinkCodes,
   getBabyName,
   setBabyName,
   getEventSummaryByDay,
@@ -89,12 +91,31 @@ function rateLimit(key: string, maxCount: number, windowMs: number): boolean {
   return true;
 }
 
+// Per-primary-chat daily chart budget — prevents expensive render abuse
+const CHART_DAILY_LIMIT = 20;
+const chartCounts = new Map<string, number>();
+
+function chartRateLimit(primaryId: number): boolean {
+  const key = `${primaryId}:${todayStr()}`;
+  const used = chartCounts.get(key) ?? 0;
+  if (used >= CHART_DAILY_LIMIT) return false;
+  chartCounts.set(key, used + 1);
+  return true;
+}
+
 // Prune expired buckets every 10 minutes to prevent unbounded growth
 setInterval(() => {
   const now = Date.now();
   for (const [key, bucket] of rateBuckets) {
     if (now >= bucket.resetAt) rateBuckets.delete(key);
   }
+  // Prune yesterday's chart counters
+  const today = todayStr();
+  for (const key of chartCounts.keys()) {
+    if (!key.endsWith(`:${today}`)) chartCounts.delete(key);
+  }
+  // Clean up expired link codes
+  deleteExpiredLinkCodes().catch((e) => console.error('deleteExpiredLinkCodes:', e));
 }, 10 * 60_000);
 
 /**
@@ -421,7 +442,7 @@ bot.command('share', async (ctx) => {
   await registerChat(ctx.chat.id);
   const code = await createLinkCode(ctx.chat.id);
   await ctx.reply(
-    `🔗 Your link code is: *${code}*\n\nAsk your partner to send the bot:\n/join ${code}\n\nThe code expires after one use.`,
+    `🔗 Your link code is: *${code}*\n\nAsk your partner to send the bot:\n/join ${code}\n\nThe code expires after one use or in 1 hour.`,
     { parse_mode: 'Markdown' }
   );
 });
@@ -605,10 +626,14 @@ bot.callbackQuery('menu:trends', async (ctx) => {
 
 bot.callbackQuery('trends:heatmap', async (ctx) => {
   if (!await guard(ctx)) return;
-  await ctx.answerCallbackQuery('Generating chart…');
   const chatId = getChatId(ctx);
   if (chatId) {
     const primaryId = await resolvePrimaryChat(chatId);
+    if (!chartRateLimit(primaryId)) {
+      await ctx.answerCallbackQuery({ text: `Chart limit reached (${CHART_DAILY_LIMIT}/day). Try again tomorrow.`, show_alert: true });
+      return;
+    }
+    await ctx.answerCallbackQuery('Generating chart…');
     try { await ctx.editMessageText('What do you need?', { reply_markup: menuKeyboard() }); } catch {}
     await sendTrends(chatId, primaryId);
   }
@@ -616,10 +641,14 @@ bot.callbackQuery('trends:heatmap', async (ctx) => {
 
 bot.callbackQuery('trends:feedsleep', async (ctx) => {
   if (!await guard(ctx)) return;
-  await ctx.answerCallbackQuery('Generating chart…');
   const chatId = getChatId(ctx);
   if (chatId) {
     const primaryId = await resolvePrimaryChat(chatId);
+    if (!chartRateLimit(primaryId)) {
+      await ctx.answerCallbackQuery({ text: `Chart limit reached (${CHART_DAILY_LIMIT}/day). Try again tomorrow.`, show_alert: true });
+      return;
+    }
+    await ctx.answerCallbackQuery('Generating chart…');
     try { await ctx.editMessageText('What do you need?', { reply_markup: menuKeyboard() }); } catch {}
     await sendFeedSleepChart(chatId, primaryId);
   }
@@ -627,10 +656,14 @@ bot.callbackQuery('trends:feedsleep', async (ctx) => {
 
 bot.callbackQuery('trends:mlsleep', async (ctx) => {
   if (!await guard(ctx)) return;
-  await ctx.answerCallbackQuery('Generating chart…');
   const chatId = getChatId(ctx);
   if (chatId) {
     const primaryId = await resolvePrimaryChat(chatId);
+    if (!chartRateLimit(primaryId)) {
+      await ctx.answerCallbackQuery({ text: `Chart limit reached (${CHART_DAILY_LIMIT}/day). Try again tomorrow.`, show_alert: true });
+      return;
+    }
+    await ctx.answerCallbackQuery('Generating chart…');
     try { await ctx.editMessageText('What do you need?', { reply_markup: menuKeyboard() }); } catch {}
     await sendMlSleepChart(chatId, primaryId);
   }
@@ -638,10 +671,14 @@ bot.callbackQuery('trends:mlsleep', async (ctx) => {
 
 bot.callbackQuery('trends:timing', async (ctx) => {
   if (!await guard(ctx)) return;
-  await ctx.answerCallbackQuery('Generating chart…');
   const chatId = getChatId(ctx);
   if (chatId) {
     const primaryId = await resolvePrimaryChat(chatId);
+    if (!chartRateLimit(primaryId)) {
+      await ctx.answerCallbackQuery({ text: `Chart limit reached (${CHART_DAILY_LIMIT}/day). Try again tomorrow.`, show_alert: true });
+      return;
+    }
+    await ctx.answerCallbackQuery('Generating chart…');
     try { await ctx.editMessageText('What do you need?', { reply_markup: menuKeyboard() }); } catch {}
     await sendFeedTimingChart(chatId, primaryId);
   }
@@ -649,10 +686,14 @@ bot.callbackQuery('trends:timing', async (ctx) => {
 
 bot.callbackQuery('trends:wake', async (ctx) => {
   if (!await guard(ctx)) return;
-  await ctx.answerCallbackQuery('Generating chart…');
   const chatId = getChatId(ctx);
   if (chatId) {
     const primaryId = await resolvePrimaryChat(chatId);
+    if (!chartRateLimit(primaryId)) {
+      await ctx.answerCallbackQuery({ text: `Chart limit reached (${CHART_DAILY_LIMIT}/day). Try again tomorrow.`, show_alert: true });
+      return;
+    }
+    await ctx.answerCallbackQuery('Generating chart…');
     try { await ctx.editMessageText('What do you need?', { reply_markup: menuKeyboard() }); } catch {}
     await sendWakeWindowChart(chatId, primaryId);
   }
@@ -1300,7 +1341,9 @@ async function sendWakeWindowChart(chatId: number, primaryId: number) {
 cron.schedule('*/5 * * * *', async () => {
   let chats: number[];
   try {
-    chats = await getAuthorizedChats();
+    // Only fetch chats whose last feed is in the reminder window —
+    // avoids querying every registered user on every tick.
+    chats = await getChatsNeedingReminder();
   } catch (err) {
     console.error('Cron: failed to fetch chats:', err);
     return;
