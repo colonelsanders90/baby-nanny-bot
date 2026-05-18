@@ -1,5 +1,5 @@
 import { Bot, InlineKeyboard, InputFile } from 'grammy';
-import { generateTrendsImage, DayStats, generateFeedSleepChart, FeedSleepDay, generateMlSleepChart, MlSleepPoint, generateFeedTimingChart } from './charts';
+import { generateTrendsImage, DayStats, generateFeedSleepChart, FeedSleepDay, generateMlSleepChart, MlSleepPoint, generateFeedTimingChart, generateWakeWindowChart, WakeWindowPoint } from './charts';
 import cron from 'node-cron';
 import {
   initDb,
@@ -25,6 +25,9 @@ import {
   getFeedTimestampsForPeriod,
   getFeedCorrelationData,
   getFeedTimingsForPeriod,
+  logSleepEvent,
+  getLastSleepWakeEvent,
+  getSleepWakeEventsForPeriod,
   VALID_NAPPY_TYPES,
 } from './db';
 
@@ -124,7 +127,7 @@ async function guard(ctx: any, rateLimitKey?: string): Promise<boolean> {
 // Conversation state (per chat)
 // ============================================================
 
-type ConvStep = 'baby_name' | 'feed_ml' | 'feed_time' | 'nappy_time';
+type ConvStep = 'baby_name' | 'feed_ml' | 'feed_time' | 'nappy_time' | 'sleep_time' | 'wake_time';
 interface ConvState { step: ConvStep; amountMl?: number; nappyType?: string; }
 const conv = new Map<number, ConvState>();
 
@@ -260,6 +263,8 @@ function menuKeyboard() {
     .text('📅 Daily', 'menu:daily')
     .text('🗑️ Delete', 'menu:delete').row()
     .text('📈 Trends', 'menu:trends').row()
+    .text('😴 Asleep', 'menu:sleep')
+    .text('👶 Awake', 'menu:wake').row()
     .text('💧 Wet nappy', 'nappy:wet')
     .text('💩 Dirty', 'nappy:dirty')
     .text('💩💧 Both', 'nappy:both');
@@ -271,6 +276,7 @@ function trendsKeyboard() {
     .text('😴 Feed vs Sleep',    'trends:feedsleep').row()
     .text('🍼 ml vs Sleep',      'trends:mlsleep').row()
     .text('⏰ Feed Timing',      'trends:timing').row()
+    .text('👀 Wake Windows',     'trends:wake').row()
     .text('⬅️ Back',             'cancel');
 }
 
@@ -641,6 +647,39 @@ bot.callbackQuery('trends:timing', async (ctx) => {
   }
 });
 
+bot.callbackQuery('trends:wake', async (ctx) => {
+  if (!await guard(ctx)) return;
+  await ctx.answerCallbackQuery('Generating chart…');
+  const chatId = getChatId(ctx);
+  if (chatId) {
+    const primaryId = await resolvePrimaryChat(chatId);
+    try { await ctx.editMessageText('What do you need?', { reply_markup: menuKeyboard() }); } catch {}
+    await sendWakeWindowChart(chatId, primaryId);
+  }
+});
+
+bot.callbackQuery('menu:sleep', async (ctx) => {
+  if (!await guard(ctx)) return;
+  const chatId = getChatId(ctx);
+  await registerChat(chatId);
+  conv.set(chatId, { step: 'sleep_time' });
+  await ctx.answerCallbackQuery();
+  await ctx.reply('😴 Baby fell asleep — when?\n\nTap *Just now* or type the time (HH:MM, 24h):', {
+    parse_mode: 'Markdown', reply_markup: timeKeyboard(),
+  });
+});
+
+bot.callbackQuery('menu:wake', async (ctx) => {
+  if (!await guard(ctx)) return;
+  const chatId = getChatId(ctx);
+  await registerChat(chatId);
+  conv.set(chatId, { step: 'wake_time' });
+  await ctx.answerCallbackQuery();
+  await ctx.reply('👶 Baby woke up — when?\n\nTap *Just now* or type the time (HH:MM, 24h):', {
+    parse_mode: 'Markdown', reply_markup: timeKeyboard(),
+  });
+});
+
 // Show confirmation before deleting
 bot.callbackQuery(/^del:(\d+)$/, async (ctx) => {
   if (!await guard(ctx)) return;
@@ -655,6 +694,8 @@ bot.callbackQuery(/^del:(\d+)$/, async (ctx) => {
   }
   const label = event.type === 'feed'
     ? `🍼 ${event.amount_ml}ml at ${formatTimeInTz(new Date(event.logged_at))}`
+    : event.type === 'sleep' || event.type === 'wake'
+    ? `${event.type === 'sleep' ? '😴' : '👶'} ${event.type === 'sleep' ? 'Fell asleep' : 'Woke up'} at ${formatTimeInTz(new Date(event.logged_at))}`
     : `${NAPPY_EMOJI[event.nappy_type] ?? '🚼'} ${event.nappy_type} nappy at ${formatTimeInTz(new Date(event.logged_at))}`;
   await ctx.answerCallbackQuery();
   await ctx.editMessageText(
@@ -680,6 +721,8 @@ bot.callbackQuery(/^delconfirm:(\d+)$/, async (ctx) => {
   }
   const label = deleted.type === 'feed'
     ? `🍼 ${deleted.amount_ml}ml at ${formatTimeInTz(new Date(deleted.logged_at))}`
+    : deleted.type === 'sleep' || deleted.type === 'wake'
+    ? `${deleted.type === 'sleep' ? '😴' : '👶'} ${deleted.type === 'sleep' ? 'Fell asleep' : 'Woke up'} at ${formatTimeInTz(new Date(deleted.logged_at))}`
     : `${NAPPY_EMOJI[deleted.nappy_type] ?? '🚼'} ${deleted.nappy_type} nappy at ${formatTimeInTz(new Date(deleted.logged_at))}`;
   await ctx.answerCallbackQuery({ text: 'Deleted ✅' });
   await ctx.editMessageText(`✅ Deleted: ${label}`, { reply_markup: menuKeyboard() });
@@ -760,7 +803,7 @@ bot.on('message:text', async (ctx) => {
     return;
   }
 
-  if (state.step === 'feed_time' || state.step === 'nappy_time') {
+  if (state.step === 'feed_time' || state.step === 'nappy_time' || state.step === 'sleep_time' || state.step === 'wake_time') {
     const loggedAt = parseHHMM(text);
     if (!loggedAt) {
       await ctx.reply(
@@ -801,6 +844,20 @@ async function finishLog(
     await reply(`✅ ${emoji} Nappy change logged (${state.nappyType})${timeSuffix}`, {
       reply_markup: menuKeyboard(),
     });
+  } else if (state.step === 'sleep_time') {
+    const primaryId = await resolvePrimaryChat(chatId);
+    const babyName = await getCachedBabyName(primaryId) ?? 'baby';
+    await logSleepEvent(primaryId, 'sleep', loggedAt);
+    await reply(`✅ 😴 ${babyName} fell asleep${timeSuffix}`, {
+      reply_markup: menuKeyboard(),
+    });
+  } else if (state.step === 'wake_time') {
+    const primaryId = await resolvePrimaryChat(chatId);
+    const babyName = await getCachedBabyName(primaryId) ?? 'baby';
+    await logSleepEvent(primaryId, 'wake', loggedAt);
+    await reply(`✅ 👶 ${babyName} woke up${timeSuffix}`, {
+      reply_markup: menuKeyboard(),
+    });
   }
 }
 
@@ -812,9 +869,10 @@ async function sendStatus(
   chatId: number,
   reply: (text: string, extra?: { reply_markup: InlineKeyboard }) => Promise<unknown>
 ) {
-  const [lastFeed, lastNappy] = await Promise.all([
+  const [lastFeed, lastNappy, lastSleepWake] = await Promise.all([
     getLastFeed(chatId),
     getLastNappy(chatId),
+    getLastSleepWakeEvent(chatId),
   ]);
 
   const feedAgo  = lastFeed ? formatAgo(new Date(lastFeed.logged_at)) : null;
@@ -834,7 +892,16 @@ async function sendStatus(
     ? `${nappyEmoji} Last nappy: ${lastNappy.nappy_type} — ${nappyAgo} (${nappyTime})`
     : '🚼 No nappy changes logged yet';
 
-  await reply([feedLine, nextLine, nappyLine].filter(Boolean).join('\n'), {
+  let sleepLine = '';
+  if (lastSleepWake) {
+    const swAgo  = formatAgo(new Date(lastSleepWake.logged_at));
+    const swTime = formatTime(new Date(lastSleepWake.logged_at));
+    sleepLine = lastSleepWake.type === 'wake'
+      ? `👶 Awake: ${swAgo} (since ${swTime})`
+      : `😴 Asleep: ${swAgo} (since ${swTime})`;
+  }
+
+  await reply([feedLine, nextLine, nappyLine, sleepLine].filter(Boolean).join('\n'), {
     reply_markup: menuKeyboard(),
   });
 }
@@ -869,6 +936,11 @@ async function sendDeleteList(
     if (e.type === 'feed') {
       lines.push(`🍼 ${e.amount_ml}ml — ${dateLabel} ${time}`);
       kb.text(`🍼 ${e.amount_ml}ml ${dateLabel} ${time}`, `del:${e.id}`).row();
+    } else if (e.type === 'sleep' || e.type === 'wake') {
+      const emoji = e.type === 'sleep' ? '😴' : '👶';
+      const label = e.type === 'sleep' ? 'Fell asleep' : 'Woke up';
+      lines.push(`${emoji} ${label} — ${dateLabel} ${time}`);
+      kb.text(`${emoji} ${label} ${dateLabel} ${time}`, `del:${e.id}`).row();
     } else {
       const emoji = NAPPY_EMOJI[e.nappy_type] ?? '🚼';
       lines.push(`${emoji} ${e.nappy_type} — ${dateLabel} ${time}`);
@@ -1165,6 +1237,57 @@ async function sendFeedTimingChart(chatId: number, primaryId: number) {
     `Each row = one day · each dot = one feed`;
 
   await bot.api.sendPhoto(chatId, new InputFile(imgBuf, 'feed-timing.png'), {
+    caption,
+    reply_markup: menuKeyboard(),
+  });
+}
+
+// ============================================================
+// Wake window chart helper
+// ============================================================
+
+const WAKE_WINDOW_DAYS = 14;
+
+function computeWakeWindows(
+  rows: Array<{ type: string; logged_at: Date }>,
+  tz:   string,
+): WakeWindowPoint[] {
+  const points: WakeWindowPoint[] = [];
+  for (let i = 0; i < rows.length - 1; i++) {
+    if (rows[i].type === 'wake' && rows[i + 1].type === 'sleep') {
+      const wakeTime  = new Date(rows[i].logged_at);
+      const sleepTime = new Date(rows[i + 1].logged_at);
+      const durationH = (sleepTime.getTime() - wakeTime.getTime()) / 3_600_000;
+      if (durationH > 0 && durationH < 24) {
+        const day = wakeTime.toLocaleDateString('en-CA', { timeZone: tz });
+        points.push({ day, durationH });
+      }
+    }
+  }
+  return points;
+}
+
+async function sendWakeWindowChart(chatId: number, primaryId: number) {
+  const babyName = await getCachedBabyName(primaryId) ?? 'Baby';
+  const toDate   = todayStr();
+  const fromDate = offsetDate(toDate, -(WAKE_WINDOW_DAYS - 1));
+
+  const rows   = await getSleepWakeEventsForPeriod(primaryId, fromDate, toDate, TZ);
+  const points = computeWakeWindows(rows, TZ);
+
+  const imgBuf = await generateWakeWindowChart(points, babyName, fromDate, toDate);
+
+  const avgH = points.length > 0
+    ? (points.reduce((s, p) => s + p.durationH, 0) / points.length).toFixed(1)
+    : null;
+
+  const caption =
+    `👀 ${babyName}'s wake windows — last ${WAKE_WINDOW_DAYS} days\n\n` +
+    (avgH !== null
+      ? `⏱️ Avg wake window: ${avgH}h\n📊 ${points.length} window${points.length !== 1 ? 's' : ''} logged`
+      : `Tap 😴 Asleep and 👶 Awake to start tracking wake windows`);
+
+  await bot.api.sendPhoto(chatId, new InputFile(imgBuf, 'wake-windows.png'), {
     caption,
     reply_markup: menuKeyboard(),
   });

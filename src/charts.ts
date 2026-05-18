@@ -666,3 +666,124 @@ export async function generateFeedTimingChart(
 
   return canvas.toBuffer('image/png');
 }
+
+// ── Wake window scatter plot ──────────────────────────────────────────────────
+
+export interface WakeWindowPoint {
+  day:       string;  // YYYY-MM-DD in local tz of the wake event
+  durationH: number;  // hours awake (wake → sleep)
+}
+
+const WW_ROWS    = 14;
+const WW_LPAD    = 36;
+const WW_X0      = PAD + WW_LPAD;
+const WW_CHART_W = W - PAD - WW_LPAD - PAD;
+const WW_CHART_H = 160;
+const WW_XAXIS_H = 22;
+const WW_NOTE_H  = 18;
+const WW_H       = PAD + HEADER_H + WW_CHART_H + WW_XAXIS_H + WW_NOTE_H + PAD;
+
+const WW_DOT_R = 4;
+const WW_DOT   = 'rgba(251, 113, 133, 0.75)';
+
+/**
+ * Returns a PNG Buffer: scatter plot of wake window durations over the last 14 days.
+ * Each dot = one wake→sleep period; x = date, y = hours awake.
+ */
+export async function generateWakeWindowChart(
+  points:       WakeWindowPoint[],
+  babyName:     string,
+  fromDateStr:  string,
+  todayDateStr: string,
+): Promise<Buffer> {
+  const canvas = createCanvas(W, WW_H);
+  const ctx    = canvas.getContext('2d') as any;
+
+  roundRect(ctx, 0, 0, W, WW_H, 10, BG);
+
+  ctx.fillStyle = TEXT_DK;
+  ctx.font      = 'bold 14px Roboto';
+  ctx.textAlign = 'left';
+  ctx.fillText(`${babyName}'s wake windows — last ${WW_ROWS} days`, PAD, PAD + 22);
+
+  const dates: string[] = [];
+  {
+    let d = new Date(fromDateStr + 'T12:00:00Z');
+    const end = new Date(todayDateStr + 'T12:00:00Z');
+    while (d <= end) {
+      dates.push(d.toISOString().slice(0, 10));
+      d = new Date(d.getTime() + 86_400_000);
+    }
+  }
+
+  const chartY0  = PAD + HEADER_H;
+  const chartBot = chartY0 + WW_CHART_H;
+
+  if (points.length < 2) {
+    ctx.font      = '11px Roboto';
+    ctx.fillStyle = TEXT_LT;
+    ctx.textAlign = 'center';
+    ctx.fillText('Log \u{1F634} Asleep and \u{1F476} Awake to see wake windows here', WW_X0 + WW_CHART_W / 2, chartY0 + WW_CHART_H / 2);
+    return canvas.toBuffer('image/png');
+  }
+
+  const maxH  = Math.max(...points.map(p => p.durationH), 1);
+  const yMax  = Math.max(maxH * 1.15, 1);
+  const bstep = Math.floor(WW_CHART_W / dates.length);
+  const toX   = (i: number) => WW_X0 + i * bstep + bstep / 2;
+  const toY   = (h: number) => chartBot - Math.min(h, yMax) / yMax * WW_CHART_H;
+
+  // Y gridlines at whole hours
+  const yTickMax = Math.ceil(yMax);
+  ctx.strokeStyle = GRID_LINE;
+  ctx.lineWidth   = 1;
+  for (let h = 0; h <= yTickMax; h++) {
+    if (h > yMax) break;
+    const gy = toY(h);
+    ctx.beginPath();
+    ctx.moveTo(WW_X0, gy);
+    ctx.lineTo(WW_X0 + WW_CHART_W, gy);
+    ctx.stroke();
+    ctx.font      = '9px Roboto';
+    ctx.fillStyle = TEXT_LT;
+    ctx.textAlign = 'right';
+    ctx.fillText(`${h}h`, WW_X0 - 4, gy + 4);
+  }
+
+  // Dots
+  for (const pt of points) {
+    const i = dates.indexOf(pt.day);
+    if (i < 0) continue;
+    ctx.beginPath();
+    ctx.arc(toX(i), toY(pt.durationH), WW_DOT_R, 0, Math.PI * 2);
+    ctx.fillStyle = WW_DOT;
+    ctx.fill();
+  }
+
+  // Bottom axis
+  ctx.strokeStyle = AXIS_LINE;
+  ctx.lineWidth   = 1;
+  ctx.beginPath();
+  ctx.moveTo(WW_X0, chartBot);
+  ctx.lineTo(WW_X0 + WW_CHART_W, chartBot);
+  ctx.stroke();
+
+  // X-axis labels every 2 columns
+  for (let i = 0; i < dates.length; i++) {
+    if (i % 2 !== 0) continue;
+    const dt  = new Date(dates[i] + 'T12:00:00Z');
+    const lbl = `${dt.getUTCDate()} ${dt.toLocaleDateString('en-GB', { month: 'short', timeZone: 'UTC' })}`;
+    ctx.font      = '8px Roboto';
+    ctx.fillStyle = TEXT_LT;
+    ctx.textAlign = 'center';
+    ctx.fillText(lbl, toX(i), chartBot + 14);
+  }
+
+  // Footnote
+  ctx.font      = '8px Roboto';
+  ctx.fillStyle = TEXT_LT;
+  ctx.textAlign = 'left';
+  ctx.fillText(`${points.length} wake window${points.length !== 1 ? 's' : ''} · last ${WW_ROWS} days`, PAD, chartBot + WW_XAXIS_H + WW_NOTE_H - 2);
+
+  return canvas.toBuffer('image/png');
+}
