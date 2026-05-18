@@ -307,6 +307,40 @@ export async function getFeedTimingsForPeriod(
   return result.rows;
 }
 
+export async function logSleepEvent(chatId: number, type: 'sleep' | 'wake', loggedAt: Date) {
+  await pool.query(
+    'INSERT INTO events (chat_id, type, logged_at) VALUES ($1, $2, $3)',
+    [chatId, type, loggedAt]
+  );
+}
+
+export async function getLastSleepWakeEvent(chatId: number) {
+  const result = await pool.query(
+    `SELECT * FROM events WHERE chat_id = $1 AND type IN ('sleep', 'wake') ORDER BY logged_at DESC LIMIT 1`,
+    [chatId]
+  );
+  return result.rows[0] ?? null;
+}
+
+export async function getSleepWakeEventsForPeriod(
+  chatId: number,
+  fromDateStr: string,
+  toDateStr: string,
+  tz: string
+): Promise<Array<{ type: string; logged_at: Date }>> {
+  const result = await pool.query(
+    `SELECT type, logged_at
+     FROM events
+     WHERE chat_id = $1
+       AND type IN ('sleep', 'wake')
+       AND (logged_at AT TIME ZONE $4)::date >= ($2::date - INTERVAL '1 day')
+       AND (logged_at AT TIME ZONE $4)::date <= $3::date
+     ORDER BY logged_at ASC`,
+    [chatId, fromDateStr, toDateStr, tz]
+  );
+  return result.rows;
+}
+
 export async function getAllChats(): Promise<number[]> {
   const result = await pool.query('SELECT chat_id FROM chats');
   return result.rows.map((r) => Number(r.chat_id));

@@ -20,11 +20,16 @@
 - **Last 5** — recent feeds and nappy changes with interval deltas
 - **Daily snapshot** — full day view with ◀ ▶ navigation between days
 
+### Sleep & wake tracking
+- **Log asleep / awake** — tap 😴 Asleep when baby drifts off and 👶 Awake when they stir; same flexible time picker as feeds
+- **Wake window chart** — 14-day scatter plot of each wake→sleep period, showing how long baby stayed awake each time
+
 ### Insights & trends
 - **Activity heatmap** — GitHub-style 8-week grid for feed volume (ml/day, green) and nappy frequency (changes/day, amber)
 - **Feed vs Sleep** — 14-day bar chart: feeds per day + average sleep gap between feeds
 - **Feed Timing** — 14-day dot plot: each row a day, each dot a feed at its local time — spots emerging routines
 - **ml vs Sleep** — 60-day scatter chart with trend line: does feed volume correlate to longer sleep?
+- **Wake Windows** — 14-day scatter plot: each dot is a wake window (time awake between waking and falling asleep)
 
 ### Smart reminders
 - Prep nudge at 2h 30min after last feed
@@ -48,6 +53,7 @@
 | Feed vs Sleep | 14 days | Feeds per day + avg hours between feeds |
 | Feed Timing | 14 days | Dot plot of feed times — routine detection |
 | ml vs Sleep | 60 days | Scatter + trend line: feed volume vs subsequent sleep duration |
+| Wake Windows | 14 days | Scatter plot of wake durations (wake→sleep periods) |
 
 ---
 
@@ -63,7 +69,7 @@
 | `/last5` | Last 5 feeds and nappy changes |
 | `/daily` | Today's full day snapshot with navigation |
 | `/history` | Yesterday's snapshot |
-| `/trends` | 8-week heatmap + trend chart menu |
+| `/trends` | 8-week heatmap + trend chart menu (incl. wake windows) |
 | `/delete` | Delete a recent entry |
 | `/share` | Generate a link code for your partner |
 | `/join <code>` | Join your partner's tracker |
