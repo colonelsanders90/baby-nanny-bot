@@ -68,6 +68,34 @@ export async function getAuthorizedChats(): Promise<number[]> {
   return result.rows.map((r) => Number(r.chat_id));
 }
 
+/**
+ * Returns only chats whose primary chat's last feed is in the 2h30m–3h5m
+ * reminder window — one query instead of a full scan + N per-chat queries.
+ */
+export async function getChatsNeedingReminder(): Promise<number[]> {
+  const result = await pool.query(`
+    WITH recent_feeds AS (
+      SELECT chat_id, MAX(logged_at) AS last_feed_at
+      FROM events
+      WHERE type = 'feed'
+      GROUP BY chat_id
+      HAVING MAX(logged_at) >= NOW() - INTERVAL '185 minutes'
+         AND MAX(logged_at) <  NOW() - INTERVAL '150 minutes'
+    )
+    SELECT c.chat_id
+    FROM chats c
+    JOIN recent_feeds rf ON rf.chat_id = c.chat_id
+    WHERE c.authorized = true
+    UNION
+    SELECT cl.chat_id
+    FROM chat_links cl
+    JOIN recent_feeds rf ON rf.chat_id = cl.primary_chat_id
+    JOIN chats c ON c.chat_id = cl.chat_id
+    WHERE c.authorized = true
+  `);
+  return result.rows.map((r) => Number(r.chat_id));
+}
+
 export async function resolvePrimaryChat(chatId: number): Promise<number> {
   const result = await pool.query(
     'SELECT primary_chat_id FROM chat_links WHERE chat_id = $1',
@@ -91,7 +119,7 @@ export async function createLinkCode(chatId: number): Promise<string> {
 // Returns the primary chat_id on success, null if code is invalid or self-link.
 export async function linkChat(chatId: number, code: string): Promise<number | null> {
   const result = await pool.query(
-    `SELECT primary_chat_id FROM link_codes WHERE code = $1 AND created_at > NOW() - INTERVAL '24 hours'`,
+    `SELECT primary_chat_id FROM link_codes WHERE code = $1 AND created_at > NOW() - INTERVAL '1 hour'`,
     [code.toUpperCase()]
   );
   if (!result.rows[0]) return null;
@@ -104,6 +132,10 @@ export async function linkChat(chatId: number, code: string): Promise<number | n
   );
   await pool.query('DELETE FROM link_codes WHERE code = $1', [code.toUpperCase()]);
   return primaryChatId;
+}
+
+export async function deleteExpiredLinkCodes(): Promise<void> {
+  await pool.query(`DELETE FROM link_codes WHERE created_at <= NOW() - INTERVAL '1 hour'`);
 }
 
 // --- Validated write helpers ---
