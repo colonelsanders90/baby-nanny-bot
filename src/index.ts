@@ -303,8 +303,8 @@ function trendsKeyboard() {
 
 function mlKeyboard() {
   return new InlineKeyboard()
-    .text('90ml', 'feed_ml:90').text('100ml', 'feed_ml:100')
-    .text('110ml', 'feed_ml:110').text('120ml', 'feed_ml:120').row()
+    .text('100ml', 'feed_ml:100').text('110ml', 'feed_ml:110').text('120ml', 'feed_ml:120').row()
+    .text('130ml', 'feed_ml:130').text('140ml', 'feed_ml:140').text('150ml', 'feed_ml:150').row()
     .text('❌ Cancel', 'cancel');
 }
 
