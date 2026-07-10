@@ -169,7 +169,6 @@ async function getCachedBabyName(primaryId: number): Promise<string | null> {
 // Time helpers
 // ============================================================
 
-const MAX_BACKDATE_MS = 12 * 60 * 60 * 1000; // 12 hours
 const SGT_OFFSET_MS  = 8 * 60 * 60 * 1000;  // UTC+8
 
 // Parses HH:MM (or HHMM) as Singapore time (UTC+8) and returns a UTC Date.
@@ -196,7 +195,6 @@ function parseHHMM(text: string): Date | null {
   // Shift back to actual UTC
   const utcDate = new Date(candidate.getTime() - SGT_OFFSET_MS);
 
-  if (nowUtc - utcDate.getTime() > MAX_BACKDATE_MS) return null;
   return utcDate;
 }
 
@@ -544,10 +542,6 @@ bot.callbackQuery(/^time:(now|\d+)$/, async (ctx) => {
     loggedAt = new Date();
   } else {
     const offsetMs = parseInt(val, 10) * 60_000;
-    if (offsetMs > MAX_BACKDATE_MS) {
-      await ctx.answerCallbackQuery({ text: 'Time too far in the past', show_alert: true });
-      return;
-    }
     loggedAt = new Date(Date.now() - offsetMs);
   }
   await finishLog(chatId, state, loggedAt, (text, extra) =>
@@ -848,7 +842,7 @@ bot.on('message:text', async (ctx) => {
     const loggedAt = parseHHMM(text);
     if (!loggedAt) {
       await ctx.reply(
-        'Please enter the time as HH:MM (e.g. 14:30). Times more than 12 hours ago are not accepted:',
+        'Please enter the time as HH:MM (e.g. 14:30):',
         { reply_markup: timeKeyboard() }
       );
       return;
