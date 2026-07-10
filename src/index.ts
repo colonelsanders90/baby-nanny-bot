@@ -1432,14 +1432,25 @@ async function main() {
     { command: 'help',    description: '❓ Show all commands' },
   ]).catch((e) => console.error('setMyCommands failed:', e));
 
-  bot.start({ drop_pending_updates: true });
+  bot.start({
+    drop_pending_updates: true,
+    onStart: () => console.log('Nanny Bot polling started'),
+  }).catch((e) => {
+    console.error('bot.start() fatal error:', e);
+    process.exit(1);
+  });
   console.log('Nanny Bot running');
 }
 
 // Global error handler — prevents any single bad update from crashing the bot
 bot.catch((err) => {
-  const ctx = err.ctx;
-  console.error(`Error handling update ${ctx.update.update_id}:`, err.error);
+  console.error('Update error:', err.error ?? err);
+});
+
+// Catch unhandled rejections (e.g. from middleware bugs) and exit so Railway restarts
+process.on('unhandledRejection', (reason) => {
+  console.error('Unhandled rejection:', reason);
+  process.exit(1);
 });
 
 main().catch(console.error);
